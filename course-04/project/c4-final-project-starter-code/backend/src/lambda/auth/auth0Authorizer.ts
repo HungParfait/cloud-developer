@@ -12,7 +12,23 @@ const logger = createLogger('auth')
 // TODO: Provide a URL that can be used to download a certificate that can be used
 // to verify JWT token signature.
 // To get this URL you need to go to an Auth0 page -> Show Advanced Settings -> Endpoints -> JSON Web Key Set
-const jwksUrl = '...'
+const jwksUrl = 'https://dev-o7y30lgdjxn6hllb.us.auth0.com/.well-known/jwks.json'
+
+interface Key {
+  alg: string,
+  kty: string,
+  use: string,
+  x5c: string[],
+  e: string,
+  n: string,
+  kid: string,
+  x5t: string,
+  nbf?: string
+} 
+
+type GetKeysResponse = {
+  keys: Key[]
+};
 
 export const handler = async (
   event: CustomAuthorizerEvent
@@ -61,7 +77,35 @@ async function verifyToken(authHeader: string): Promise<JwtPayload> {
   // TODO: Implement token verification
   // You should implement it similarly to how it was implemented for the exercise for the lesson 5
   // You can read more about how to do this here: https://auth0.com/blog/navigating-rs256-and-jwks/
-  return undefined
+  const response = await Axios.get<GetKeysResponse>(jwksUrl)
+
+  const keys = response.data.keys;
+
+  if (!keys || !keys.length) {
+    throw new Error('The JWKS endpoint did not contain any keys');
+  }
+
+  const signingKeys = keys
+    .filter(key => key.use === 'sig' 
+                && key.kty === 'RSA' 
+                && key.kid
+                && ((key.x5c && key.x5c.length) || (key.n && key.e))
+    ).map(key => {
+      return { kid: key.kid, nbf: key.nbf, publicKey: key.x5c[0] };
+    });
+
+  if (!signingKeys.length) {
+    throw new Error('The JWKS endpoint did not contain any signature verification keys');
+  }
+
+  const signingKey = signingKeys.find(key => key.kid === jwt.header.kid);
+
+  if (!signingKey) {
+    throw new Error(`Unable to find a signing key that matches '${jwt.header.kid}'`);
+  }
+
+  return verify(token, '-----BEGIN CERTIFICATE-----' + '\n' + signingKey.publicKey + '\n' + '-----END CERTIFICATE-----\n', { algorithms: ['RS256'] }) as JwtPayload
+
 }
 
 function getToken(authHeader: string): string {
