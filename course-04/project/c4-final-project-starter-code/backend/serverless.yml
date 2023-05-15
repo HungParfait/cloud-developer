@@ -11,7 +11,6 @@ plugins:
 provider:
   name: aws
   runtime: nodejs18.x
-  lambdaHashingVersion: '20201221'
 
   stage: ${opt:stage, 'dev'}
   region: 'us-east-1'
@@ -51,7 +50,7 @@ functions:
   # Provide iamRoleStatements property for performing Actions on DynamoDB
   GetTodos:
     handler: src/lambda/http/getTodos.handler
-    role: LambdaRole
+    role: LambdaRoleGet
     events:
       - http:
           method: get
@@ -65,7 +64,7 @@ functions:
   # To validate incoming HTTP requests, we have provided the request schemas in function definition below. 
   CreateTodo:
     handler: src/lambda/http/createTodo.handler
-    role: LambdaRole
+    role: LambdaRoleCreate
     events:
       - http:
           method: post
@@ -80,7 +79,7 @@ functions:
   # Provide property for setting up CORS, Authorizer, iamRoleStatements, and request schemas
   UpdateTodo:
     handler: src/lambda/http/updateTodo.handler
-    role: LambdaRole
+    role: LambdaRoleUpdate
     events:
       - http:
           method: patch
@@ -95,7 +94,7 @@ functions:
   # Provide property for setting up CORS, Authorizer, iamRoleStatements
   DeleteTodo:
     handler: src/lambda/http/deleteTodo.handler
-    role: LambdaRole
+    role: LambdaRoleDelete
     events:
       - http:
           method: delete
@@ -107,7 +106,7 @@ functions:
   # Provide property for setting up CORS, Authorizer, iamRoleStatements
   GenerateUploadUrl:
     handler: src/lambda/http/generateUploadUrl.handler
-    role: LambdaRole
+    role: LambdaRoleAttachment
     events:
       - http:
           method: post
@@ -196,7 +195,7 @@ resources:
               Resource: 'arn:aws:s3:::${self:provider.environment.ATTACHMENT_S3_BUCKET}/*'
         Bucket: !Ref AttachmentsBucket
     
-    LambdaRole:
+    LambdaRoleGet:
       Type: AWS::IAM::Role
       Properties:
         AssumeRolePolicyDocument:
@@ -215,14 +214,116 @@ resources:
             Statement:
               - Effect: Allow
                 Action:
-                  - dynamodb:*
+                  - xray:*
+                  - dynamodb:Query
                   - cloudwatch:*
                   - logs:*
-                  - kms:*
+                Resource:
+                  - Fn::GetAtt: [ 'TodosTable', 'Arn' ]
+
+    LambdaRoleCreate:
+      Type: AWS::IAM::Role
+      Properties:
+        AssumeRolePolicyDocument:
+          Version: "2012-10-17"
+          Statement:
+            - Effect: Allow
+              Principal: 
+                Service:
+                  - lambda.amazonaws.com
+              Action:
+                - sts:AssumeRole
+        Policies:
+        - PolicyName: 'LambdaPolicy'
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:PutItem
+                  - cloudwatch:*
+                  - logs:*
+                Resource:
+                  - Fn::GetAtt: [ 'TodosTable', 'Arn' ]
+
+    LambdaRoleUpdate:
+      Type: AWS::IAM::Role
+      Properties:
+        AssumeRolePolicyDocument:
+          Version: "2012-10-17"
+          Statement:
+            - Effect: Allow
+              Principal: 
+                Service:
+                  - lambda.amazonaws.com
+              Action:
+                - sts:AssumeRole
+        Policies:
+        - PolicyName: 'LambdaPolicy'
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:UpdateItem
+                  - dynamodb:GetItem                  
+                  - cloudwatch:*
+                  - logs:*
+                Resource:
+                  - Fn::GetAtt: [ 'TodosTable', 'Arn' ]
+
+    LambdaRoleDelete:
+      Type: AWS::IAM::Role
+      Properties:
+        AssumeRolePolicyDocument:
+          Version: "2012-10-17"
+          Statement:
+            - Effect: Allow
+              Principal: 
+                Service:
+                  - lambda.amazonaws.com
+              Action:
+                - sts:AssumeRole
+        Policies:
+        - PolicyName: 'LambdaPolicy'
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:DeleteItem
+                  - dynamodb:GetItem                  
+                  - cloudwatch:*
+                  - logs:*
+                Resource:
+                  - Fn::GetAtt: [ 'TodosTable', 'Arn' ]
+
+    LambdaRoleAttachment:
+      Type: AWS::IAM::Role
+      Properties:
+        AssumeRolePolicyDocument:
+          Version: "2012-10-17"
+          Statement:
+            - Effect: Allow
+              Principal: 
+                Service:
+                  - lambda.amazonaws.com
+              Action:
+                - sts:AssumeRole
+        Policies:
+        - PolicyName: 'LambdaPolicy'
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:UpdateItem
+                  - cloudwatch:*
+                  - logs:*
                   - s3:*
                 Resource:
                   - Fn::GetAtt: [ 'TodosTable', 'Arn' ]
-                  - Fn::GetAtt: [ 'AttachmentsBucket', 'Arn' ]
+                  - Fn::GetAtt: [ 'AttachmentsBucket', 'Arn' ]                                                       
 
 
 

@@ -120,7 +120,7 @@ export class TodosAccess {
         const command = new UpdateItemCommand({
             TableName: this.todosTable,
             AttributeUpdates: {
-                name: {
+                attachmentUrl: {
                     Action: 'PUT',
                     Value: {
                         S: url
